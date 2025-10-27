@@ -106,6 +106,7 @@ class C3DConvexPoly {
 
     bool IsDuplicateVertex(const Vec3 &point, double epsilon) const;
     void PruneFaces(double epsilon);
+    void CompactVertices();
 
     struct FaceKey {
         std::array<int, 3> indices;

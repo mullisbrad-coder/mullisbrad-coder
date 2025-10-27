@@ -112,6 +112,69 @@ void C3DConvexPoly::PruneFaces(double epsilon) {
     faces_.swap(pruned);
 }
 
+void C3DConvexPoly::CompactVertices() {
+    if (vertices_.empty()) {
+        interior_point_ = Vec3{0.0, 0.0, 0.0};
+        return;
+    }
+
+    std::vector<char> used(vertices_.size(), 0);
+    for (const Face &face : faces_) {
+        used[face.a] = 1;
+        used[face.b] = 1;
+        used[face.c] = 1;
+    }
+
+    std::size_t active_count = 0;
+    for (char flag : used) {
+        active_count += static_cast<std::size_t>(flag);
+    }
+
+    if (active_count == 0) {
+        vertices_.clear();
+        interior_point_ = Vec3{0.0, 0.0, 0.0};
+        return;
+    }
+
+    if (active_count == vertices_.size()) {
+        Vec3 accum{0.0, 0.0, 0.0};
+        for (const Vec3 &v : vertices_) {
+            accum += v;
+        }
+        interior_point_ = accum / static_cast<double>(vertices_.size());
+        return;
+    }
+
+    std::vector<Vec3> compact;
+    compact.reserve(active_count);
+    std::vector<int> remap(vertices_.size(), -1);
+
+    for (std::size_t i = 0; i < vertices_.size(); ++i) {
+        if (used[i]) {
+            remap[i] = static_cast<int>(compact.size());
+            compact.push_back(vertices_[i]);
+        }
+    }
+
+    for (Face &face : faces_) {
+        face.a = remap[face.a];
+        face.b = remap[face.b];
+        face.c = remap[face.c];
+    }
+
+    vertices_.swap(compact);
+
+    Vec3 accum{0.0, 0.0, 0.0};
+    for (const Vec3 &v : vertices_) {
+        accum += v;
+    }
+    if (!vertices_.empty()) {
+        interior_point_ = accum / static_cast<double>(vertices_.size());
+    } else {
+        interior_point_ = Vec3{0.0, 0.0, 0.0};
+    }
+}
+
 C3DConvexPoly::C3DConvexPoly(double half_extent) {
     double h = half_extent;
     vertices_.reserve(16);
@@ -246,12 +309,14 @@ bool C3DConvexPoly::AddPoint(const Vec3 &point, double epsilon) {
     // Remove any degenerate or duplicate faces created by numerical error so
     // the hull stays as compact as possible.
     PruneFaces(epsilon);
+    CompactVertices();
 
     return true;
 }
 
 void C3DConvexPoly::Optimize(double epsilon) {
     PruneFaces(epsilon);
+    CompactVertices();
 }
 
 } // namespace c3d
