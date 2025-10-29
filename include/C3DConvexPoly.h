@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <vector>
 
@@ -31,6 +32,13 @@ struct Vec3 {
         x *= s;
         y *= s;
         z *= s;
+        return *this;
+    }
+
+    Vec3 &operator/=(double s) {
+        x /= s;
+        y /= s;
+        z /= s;
         return *this;
     }
 
@@ -67,6 +75,9 @@ class C3DConvexPoly {
     const std::vector<Vec3> &Vertices() const { return vertices_; }
     const std::vector<Face> &Faces() const { return faces_; }
 
+    static C3DConvexPoly BuildJarvisMarch(const std::vector<Vec3> &points, double epsilon = 1e-9);
+    static C3DConvexPoly BuildGrahamScan(const std::vector<Vec3> &points, double epsilon = 1e-9);
+
   private:
     struct EdgeKey {
         int from;
@@ -82,6 +93,8 @@ class C3DConvexPoly {
     };
 
     static Face MakeFace(int a, int b, int c, const std::vector<Vec3> &vertices, const Vec3 &interior_point);
+
+    C3DConvexPoly(std::vector<Vec3> vertices, std::vector<Face> faces, Vec3 interior_point);
 
     std::vector<Vec3> vertices_;
     std::vector<Face> faces_;
