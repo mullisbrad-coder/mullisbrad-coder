@@ -58,7 +58,14 @@ struct Face {
 
 class C3DConvexPoly {
   public:
-    explicit C3DConvexPoly(double half_extent = 1.0);
+    enum class HorizonTriangulation {
+        kEdgeFan,
+        kJarvisMarch,
+        kGrahamScan,
+    };
+
+    explicit C3DConvexPoly(double half_extent = 1.0,
+                           HorizonTriangulation method = HorizonTriangulation::kJarvisMarch);
 
     bool AddPoint(const Vec3 &point, double epsilon = 1e-9);
 
@@ -66,6 +73,9 @@ class C3DConvexPoly {
 
     const std::vector<Vec3> &Vertices() const { return vertices_; }
     const std::vector<Face> &Faces() const { return faces_; }
+
+    void SetTriangulationMethod(HorizonTriangulation method) { method_ = method; }
+    HorizonTriangulation TriangulationMethod() const { return method_; }
 
   private:
     struct EdgeKey {
@@ -83,9 +93,26 @@ class C3DConvexPoly {
 
     static Face MakeFace(int a, int b, int c, const std::vector<Vec3> &vertices, const Vec3 &interior_point);
 
+    struct ProjectedVertex {
+        int index;
+        double x;
+        double y;
+    };
+
+    std::vector<Face> BuildHorizonFaces(int new_index, const std::vector<EdgeKey> &edges) const;
+    std::vector<int> JarvisMarchHull(const std::vector<ProjectedVertex> &points) const;
+    std::vector<int> GrahamScanHull(const std::vector<ProjectedVertex> &points) const;
+    std::vector<ProjectedVertex> ProjectComponent(const std::vector<int> &component_vertices,
+                                                  const std::vector<int> &component_edges,
+                                                  int new_index,
+                                                  const std::vector<EdgeKey> &edges) const;
+    static double Orientation2D(const ProjectedVertex &a, const ProjectedVertex &b, const ProjectedVertex &c);
+    static double DistanceSq2D(const ProjectedVertex &a, const ProjectedVertex &b);
+
     std::vector<Vec3> vertices_;
     std::vector<Face> faces_;
     Vec3 interior_point_;
+    HorizonTriangulation method_;
 };
 
 } // namespace c3d

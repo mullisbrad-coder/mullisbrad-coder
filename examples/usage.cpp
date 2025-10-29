@@ -1,19 +1,37 @@
 #include "C3DConvexPoly.h"
 
 #include <iostream>
+#include <string>
+#include <vector>
 
-int main() {
-    c3d::C3DConvexPoly hull(1.0);
-
-    c3d::Vec3 p1{2.0, 0.0, 0.0};
-    c3d::Vec3 p2{0.0, 0.5, 0.0};
-
-    bool added1 = hull.AddPoint(p1);
-    bool added2 = hull.AddPoint(p2);
-
-    std::cout << "Added1: " << added1 << "\n";
-    std::cout << "Added2: " << added2 << "\n";
-    std::cout << "Total vertices: " << hull.Vertices().size() << "\n";
-    std::cout << "Total faces: " << hull.Faces().size() << "\n";
+void PrintHull(const std::string &label, const c3d::C3DConvexPoly &hull) {
+    std::cout << label << "\n";
+    std::cout << "  Vertices: " << hull.Vertices().size() << "\n";
+    std::cout << "  Faces: " << hull.Faces().size() << "\n";
 }
 
+int main() {
+    using c3d::C3DConvexPoly;
+    using c3d::Vec3;
+
+    std::vector<Vec3> samples = {
+        Vec3{2.0, 0.0, 0.0},
+        Vec3{0.0, 2.0, 0.0},
+        Vec3{0.0, 0.0, 2.0},
+        Vec3{-1.5, -1.0, 1.2},
+        Vec3{1.0, -1.5, -1.1},
+    };
+
+    C3DConvexPoly jarvis_hull(1.0, C3DConvexPoly::HorizonTriangulation::kJarvisMarch);
+    C3DConvexPoly graham_hull(1.0, C3DConvexPoly::HorizonTriangulation::kGrahamScan);
+
+    for (const Vec3 &p : samples) {
+        jarvis_hull.AddPoint(p);
+        graham_hull.AddPoint(p);
+    }
+
+    PrintHull("Jarvis March hull", jarvis_hull);
+    PrintHull("Graham Scan hull", graham_hull);
+
+    return 0;
+}
