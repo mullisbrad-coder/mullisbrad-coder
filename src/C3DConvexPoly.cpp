@@ -1,12 +1,15 @@
 #include "C3DConvexPoly.h"
 
+#include <algorithm>
+#include <array>
 #include <cmath>
-#include <unordered_map>
+#include <unordered_set>
 
 namespace c3d {
 namespace {
 
 constexpr double kEpsilon = 1e-9;
+constexpr double kAreaEpsilon = 1e-12;
 
 Vec3 Normalize(const Vec3 &v) {
     double length = std::sqrt(Dot(v, v));
@@ -15,6 +18,31 @@ Vec3 Normalize(const Vec3 &v) {
     }
     return Vec3{v.x / length, v.y / length, v.z / length};
 }
+
+double TriangleArea(const Vec3 &a, const Vec3 &b, const Vec3 &c) {
+    Vec3 ab = b - a;
+    Vec3 ac = c - a;
+    Vec3 cross = Cross(ab, ac);
+    return 0.5 * std::sqrt(Dot(cross, cross));
+}
+
+struct FaceKey {
+    std::array<int, 3> indices;
+
+    explicit FaceKey(int a, int b, int c) : indices{a, b, c} {
+        std::sort(indices.begin(), indices.end());
+    }
+
+    bool operator==(const FaceKey &other) const { return indices == other.indices; }
+};
+
+struct FaceKeyHasher {
+    std::size_t operator()(const FaceKey &key) const noexcept {
+        return (static_cast<std::size_t>(key.indices[0]) * 73856093u) ^
+               (static_cast<std::size_t>(key.indices[1]) * 19349663u) ^
+               (static_cast<std::size_t>(key.indices[2]) * 83492791u);
+    }
+};
 
 Face BuildFace(int a, int b, int c, const std::vector<Vec3> &vertices, const Vec3 &interior_point) {
     Face face;
@@ -100,6 +128,10 @@ bool C3DConvexPoly::Contains(const Vec3 &point, double epsilon) const {
 }
 
 bool C3DConvexPoly::AddPoint(const Vec3 &point, double epsilon) {
+    // Incremental 3D Jarvis March (gift wrapping) update.  Each call removes faces that
+    // can see the new point, then stitches the "horizon" edges with new triangles.
+    // By filtering degenerate triangles and reusing existing face keys we keep the
+    // surface minimal while maintaining convexity.
     if (Contains(point, epsilon)) {
         return false;
     }
@@ -123,7 +155,7 @@ bool C3DConvexPoly::AddPoint(const Vec3 &point, double epsilon) {
         return false;
     }
 
-    std::unordered_map<EdgeKey, int, EdgeKeyHasher> boundary_edges;
+    std::unordered_set<EdgeKey, EdgeKeyHasher> boundary_edges;
     auto add_edge = [&](int from, int to) {
         EdgeKey key{from, to};
         EdgeKey opposite{to, from};
@@ -131,7 +163,7 @@ bool C3DConvexPoly::AddPoint(const Vec3 &point, double epsilon) {
         if (it != boundary_edges.end()) {
             boundary_edges.erase(it);
         } else {
-            boundary_edges.emplace(key, 1);
+            boundary_edges.emplace(key);
         }
     };
 
@@ -144,12 +176,37 @@ bool C3DConvexPoly::AddPoint(const Vec3 &point, double epsilon) {
         face_removed[idx] = 1;
     }
 
+    std::unordered_set<FaceKey, FaceKeyHasher> existing_faces;
+    existing_faces.reserve(faces_.size() + boundary_edges.size());
+    for (int i = 0; i < static_cast<int>(faces_.size()); ++i) {
+        if (!face_removed[i]) {
+            const Face &face = faces_[i];
+            existing_faces.emplace(face.a, face.b, face.c);
+        }
+    }
+
     std::vector<Face> new_faces;
     new_faces.reserve(boundary_edges.size());
-    for (const auto &entry : boundary_edges) {
-        int a = entry.first.from;
-        int b = entry.first.to;
+    for (const auto &edge : boundary_edges) {
+        int a = edge.from;
+        int b = edge.to;
+        if (a == b) {
+            continue;
+        }
+        FaceKey key(a, b, new_index);
+        if (existing_faces.find(key) != existing_faces.end()) {
+            continue;
+        }
+
         Face face = MakeFace(a, b, new_index, vertices_, interior_point_);
+        const Vec3 &va = vertices_[face.a];
+        const Vec3 &vb = vertices_[face.b];
+        const Vec3 &vc = vertices_[face.c];
+        if (TriangleArea(va, vb, vc) <= kAreaEpsilon) {
+            continue;
+        }
+
+        existing_faces.insert(key);
         new_faces.push_back(face);
     }
 
