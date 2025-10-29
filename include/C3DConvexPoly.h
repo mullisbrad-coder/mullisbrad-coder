@@ -67,6 +67,8 @@ class C3DConvexPoly {
     const std::vector<Vec3> &Vertices() const { return vertices_; }
     const std::vector<Face> &Faces() const { return faces_; }
 
+    void Optimize(double epsilon = 1e-9);
+
   private:
     struct EdgeKey {
         int from;
@@ -83,10 +85,18 @@ class C3DConvexPoly {
 
     static Face MakeFace(int a, int b, int c, const std::vector<Vec3> &vertices, const Vec3 &interior_point);
 
+    void CleanupHull(double epsilon);
+
     std::vector<Vec3> vertices_;
     std::vector<Face> faces_;
     Vec3 interior_point_;
+
+    friend C3DConvexPoly BuildConvexPolyJarvis(const std::vector<Vec3> &points, double epsilon);
+    friend C3DConvexPoly BuildConvexPolyGraham(const std::vector<Vec3> &points, double epsilon);
 };
+
+C3DConvexPoly BuildConvexPolyJarvis(const std::vector<Vec3> &points, double epsilon = 1e-9);
+C3DConvexPoly BuildConvexPolyGraham(const std::vector<Vec3> &points, double epsilon = 1e-9);
 
 } // namespace c3d
 
